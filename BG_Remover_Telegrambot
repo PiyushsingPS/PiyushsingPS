@@ -1,0 +1,148 @@
+import os
+import requests
+import logging
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+
+# Telegram Bot Token
+TELEGRAM_BOT_TOKEN = "8016315507:AAF6o5mxIYD6N5atbXy-DDEsD0hTQgW6944"
+REMOVE_BG_API_KEY = "oqZkD9ppMDp3pGMYcsstc81u"
+
+# Enable logging
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
+
+# 1️⃣ Start Command
+async def start(update: Update, context: CallbackContext) -> None:
+    """Start command - Welcome Message"""
+    await update.message.reply_text(
+        "👋 *Welcome to BG Remover Official Bot!* \n\n"
+        "📷 Send me an image, and I'll remove the background for you instantly! 🎨✨\n"
+        "💡 Type /help if you need assistance.",
+        parse_mode="Markdown"
+    )
+
+# 2️⃣ Help Command
+async def help_command(update: Update, context: CallbackContext) -> None:
+    """Help command - Shows available commands"""
+    await update.message.reply_text(
+        "🛠 *How to Use Me?* 🛠\n\n"
+        "1️⃣ Send me a photo 📷\n"
+        "2️⃣ Wait a few seconds ⏳\n"
+        "3️⃣ I’ll return the image with the background removed! 🎨\n\n"
+        "⚡ *Commands:* \n"
+        "/start - Start the bot & get a welcome message\n"
+        "/help - See this help message\n"
+        "/about - Learn more about this bot\n"
+        "/contact - Get support & contact details\n\n"
+        "🚀 Try it now! Just send me an image!"
+    )
+
+# 3️⃣ About Command
+async def about_command(update: Update, context: CallbackContext) -> None:
+    """About command - Information about the bot"""
+    await update.message.reply_text(
+        "🤖 *BG Remover Official Bot*\n"
+        "Created by @Dev_PiyushSingh, a developer passionate about AI & automation. 🚀\n\n"
+        "🔧 Powered by Remove.bg API\n"
+        "💡 Removes image backgrounds in seconds!"
+    )
+
+# 4️⃣ Contact Command
+async def contact_command(update: Update, context: CallbackContext) -> None:
+    """Contact command - Support details"""
+    await update.message.reply_text(
+        "📞 *Contact Support*\n"
+        "If you have any issues, reach out to:\n\n"
+        "📧 Email: piyushrj9899@gmail.com\n"
+        "📱 Telegram: @Dev_PiyushSingh"
+    )
+
+# 5️⃣ Image Processing
+async def remove_bg(image_path):
+    """Send image to remove.bg and get background removed"""
+    url = "https://api.remove.bg/v1.0/removebg"
+    with open(image_path, "rb") as image_file:
+        response = requests.post(
+            url,
+            files={"image_file": image_file},
+            data={"size": "auto"},
+            headers={"X-Api-Key": REMOVE_BG_API_KEY}
+        )
+
+    if response.status_code == 200:
+        output_path = image_path.replace(".jpg", "_no_bg.png").replace(".jpeg", "_no_bg.png").replace(".png", "_no_bg.png")
+        with open(output_path, "wb") as out_file:
+            out_file.write(response.content)
+        return output_path
+    else:
+        return None
+
+async def handle_photo(update: Update, context: CallbackContext) -> None:
+    """Handles images sent by users"""
+    photo = update.message.photo[-1]  # Get highest resolution photo
+    file = await context.bot.get_file(photo.file_id)
+    file_path = f"{photo.file_id}.png"
+    await file.download_to_drive(file_path)
+
+    await update.message.reply_text("⏳ Processing your image... Please wait.")
+
+    output_path = await remove_bg(file_path)
+
+    if output_path:
+        with open(output_path, "rb") as output:
+            await update.message.reply_photo(output, caption="✅ Background removed successfully! 🎉\nThank you for using @Bg_removerOfficial_bot.")
+        os.remove(output_path)
+    else:
+        await update.message.reply_text("❌ Sorry! Background removal failed. Try again later.")
+
+    os.remove(file_path)  # Clean up
+
+# 6️⃣ Fun Replies for Text Messages
+async def handle_text(update: Update, context: CallbackContext) -> None:
+    """Handles casual text messages"""
+    text = update.message.text.lower()
+
+    replies = {
+        "hi": "👋 Hey there!",
+        "hello": "Hello! 😊 How can I help you?",
+        "how are you": "I'm just a bot, but I'm feeling great! What about you?",
+        "thank you": "You're welcome! 😊",
+        "bye": "Goodbye! See you again! 👋",
+        "who are you": "I'm BG Remover Official Bot! 🖼️ I can remove backgrounds from images instantly. Try sending me a photo!"
+    }
+
+    for key in replies:
+        if key in text:
+            await update.message.reply_text(replies[key])
+            return
+    
+    await update.message.reply_text("🤖 I'm here to remove backgrounds! Try sending me an image! 📷")
+
+# 7️⃣ Unknown Commands
+async def unknown_command(update: Update, context: CallbackContext) -> None:
+    """Handles unknown commands"""
+    await update.message.reply_text("❌ Sorry, I don't understand that command. Type /help to see what I can do!")
+
+# 🌟 Main Bot Function
+def main():
+    """Main function to run the bot"""
+    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+
+    # Command Handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("about", about_command))
+    app.add_handler(CommandHandler("contact", contact_command))
+
+    # Message Handlers
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+    # Unknown Commands
+    app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
+
+    logging.info("🤖 BG Remover Official Bot is running...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
